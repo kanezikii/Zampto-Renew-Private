@@ -42,8 +42,8 @@ def process_account(sb, username, password):
         sb.uc_open_with_reconnect(LOGIN_URL, 4)
         
         # 填写账号密码 (根据 auth.zampto.net 的结构，通常是 email 和 password)
-        sb.type('peng320829@gmail.com"]', username)
-        sb.type('Qwer12138."]', password)
+        sb.type('input[type="email"]', username)
+        sb.type('input[type="password"]', password)
         
         print(" -> 等待登录页 Cloudflare 验证...")
         time.sleep(3)
