@@ -94,4 +94,34 @@ def process_account(sb, username, password):
                     account_report.append(f"  ℹ️ ID {server_id}: 未找到续期按钮")
             except Exception as e:
                 account_report.append(f"  ❌ ID {server_id}: 处理出错")
-                print(f" -> [服务 {server_id}] 验证已触发，等待自动提交...")
+                print(f" -> [服务 {server_id}] 错误信息: {e}") # 这里修复了之前的复制粘贴错误
+
+        return True, "\n".join(account_report)
+
+    except Exception as e:
+        sb.save_screenshot(f"{username}_fatal_error.png")
+        return False, f"❌ 账号 <b>{username}</b> 流程中断: {str(e)[:100]}"
+
+def main():
+    if not ZAMPTO_ACCOUNT:
+        print("错误: 未配置 ZAMPTO_ACCOUNT 环境变量")
+        return
+
+    accounts = [line.strip() for line in ZAMPTO_ACCOUNT.split('\n') if line.strip()]
+    final_reports = ["<b>Zampto 自动化续期报告</b>"]
+
+    # 关键配置：uc=True 绕过检测，headless=False 配合 xvfb 提高成功率
+    with SB(uc=True, proxy=LOCAL_PROXY, headless=False) as sb:
+        for acc in accounts:
+            if ':' not in acc: continue
+            user, pwd = acc.split(':', 1)
+            success, report = process_account(sb, user, pwd)
+            final_reports.append(report)
+            time.sleep(5)
+
+    full_msg = "\n\n".join(final_reports)
+    print(full_msg.replace("<b>", "").replace("</b>", ""))
+    send_telegram_msg(full_msg)
+
+if __name__ == "__main__":
+    main()
