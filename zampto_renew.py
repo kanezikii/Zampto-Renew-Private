@@ -40,20 +40,33 @@ def process_account(sb, username, password):
         # ---------------- 1. 登录 ----------------
         print(" -> 正在访问登录页面...")
         sb.uc_open_with_reconnect(LOGIN_URL, 4)
+        time.sleep(3) # 等待页面完全加载
         
-        # 填写账号密码 (根据 auth.zampto.net 的结构，通常是 email 和 password)
-        sb.type('input[type="email"]', username)
+        # --- 第 1 步：输入邮箱并点击下一步 ---
+        print(" -> 填写账号...")
+        # 兼容各种情况的输入框选择器
+        sb.type('input[placeholder*="Email"], input[placeholder*="Username"], input:visible', username)
+        
+        # 点击第一页的 Sign in 按钮
+        sb.click('button:contains("Sign in"), button:contains("登录"), button[type="submit"]')
+        
+        # 等待密码页面加载出来
+        time.sleep(4)
+        
+        # --- 第 2 步：输入密码并处理验证 ---
+        print(" -> 填写密码...")
+        # 此时页面上应该出现了密码框
         sb.type('input[type="password"]', password)
         
         print(" -> 等待登录页 Cloudflare 验证...")
         time.sleep(3)
         try:
-            sb.uc_gui_click_captcha() # 点击登录页的验证码空白框
+            sb.uc_gui_click_captcha() # 点击密码页的验证码空白框
         except:
             pass
             
-        # 点击登录/继续按钮 (请确保选择器匹配页面上的蓝色按钮)
-        sb.click('button:contains("继续")')
+        # 点击密码页的 继续/Sign in 按钮
+        sb.click('button:contains("继续"), button:contains("Sign in"), button[type="submit"]')
         
         # 等待登录成功，跳转到控制台域名
         sb.wait_for_url_contains('dash.zampto.net', timeout=20)
@@ -94,7 +107,7 @@ def process_account(sb, username, password):
                     account_report.append(f"  ℹ️ ID {server_id}: 未找到续期按钮")
             except Exception as e:
                 account_report.append(f"  ❌ ID {server_id}: 处理出错")
-                print(f" -> [服务 {server_id}] 错误信息: {e}") # 这里修复了之前的复制粘贴错误
+                print(f" -> [服务 {server_id}] 错误信息: {e}")
 
         return True, "\n".join(account_report)
 
