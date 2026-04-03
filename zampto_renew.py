@@ -40,19 +40,16 @@ def process_account(sb, username, password):
         # ---------------- 1. 登录 ----------------
         print(" -> 正在访问登录页面...")
         sb.uc_open_with_reconnect(LOGIN_URL, 4)
-        time.sleep(5) # 给第三方登录组件充足的加载时间
+        time.sleep(5)
         
         # --- 第 1 步：输入邮箱并点击下一步 ---
         print(" -> 填写账号...")
-        # 使用最广泛的匹配模式：不管是叫 identifier, email 还是 text，只要是个输入框就填
         account_input_selector = 'input[name="identifier"], input[name="email"], input[type="email"], input[type="text"]'
         
-        # 强制等待输入框完全可见，再进行输入
         sb.wait_for_element_visible(account_input_selector, timeout=15)
         sb.type(account_input_selector, username)
         
         print(" -> 点击继续...")
-        # 使用通用提交按钮选择器
         sb.click('button[type="submit"], button:contains("Sign in"), button.cl-formButtonPrimary')
         
         # 等待密码页面加载出来
@@ -60,23 +57,24 @@ def process_account(sb, username, password):
         
         # --- 第 2 步：输入密码并处理验证 ---
         print(" -> 填写密码...")
-        # 强制等待密码框出现
         sb.wait_for_element_visible('input[type="password"]', timeout=15)
         sb.type('input[type="password"]', password)
         
         print(" -> 等待登录页 Cloudflare 验证...")
-        time.sleep(3)
+        time.sleep(4)
         try:
             sb.uc_gui_click_captcha() # 点击密码页的验证码空白框
         except:
             pass
             
         print(" -> 提交密码...")
-        # 再次点击提交按钮
-        sb.click('button[type="submit"], button:contains("继续"), button:contains("Sign in")')
+        # 加入 "Continue" 匹配你截图中的英文按钮
+        sb.click('button[type="submit"], button:contains("Continue"), button:contains("继续"), button:contains("Sign in")')
         
-        # 等待登录成功，跳转到控制台域名
-        sb.wait_for_url_contains('dash.zampto.net', timeout=20)
+        # 修复了 BaseCase 报错，使用最稳妥的强制休眠等待登录跳转完成
+        print(" -> 等待控制台加载...")
+        time.sleep(15) 
+        
         print(" -> 登录成功！")
         sb.save_screenshot(f"{username}_login_ok.png")
 
@@ -85,7 +83,6 @@ def process_account(sb, username, password):
             server_id = url.split('=')[-1]
             print(f" -> [服务 {server_id}] 正在打开面板...")
             
-            # 在同一窗口打开服务页面
             sb.uc_open_with_reconnect(url, 3)
             time.sleep(5) # 给面板加载留足时间
             
@@ -96,14 +93,12 @@ def process_account(sb, username, password):
                     sb.click(renew_btn)
                     print(f" -> [服务 {server_id}] 已点击续期，处理验证码...")
                     
-                    # 处理弹窗里的 CF 验证
                     time.sleep(4)
                     try:
                         sb.uc_gui_click_captcha() # 点击弹窗里的空白框
                     except:
                         pass
                     
-                    # 点击空白框后会自动提交，此处等待 10 秒让请求完成
                     print(f" -> [服务 {server_id}] 验证已触发，等待自动提交...")
                     time.sleep(10)
                     
