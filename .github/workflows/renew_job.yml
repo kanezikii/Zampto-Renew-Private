@@ -1,48 +1,53 @@
-name: Zampto Renew
+name: Zampto-Renew
 
 on:
-  workflow_dispatch:  # 手动触发
-  # schedule:
-    # - cron: '28 5 * * *'
+  workflow_dispatch:
+  schedule:
+    - cron: '0 1 * * *'   # 每天 UTC 01:00 运行
+
 jobs:
-  run-zampto:
+  run_zampto_renew:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
-      - name: 拉取代码
+      - name: 📥 下载公库代码
         uses: actions/checkout@v4
 
-      - name: 检查 Secrets 是否设置
-        run: |
-          if [ -z "${{ secrets.USERNAME }}" ] || [ -z "${{ secrets.PASSWORD }}" ]; then
-            echo "❌ USERNAME 或 PASSWORD 未设置，终止执行。"
-            exit 1
-          fi
-          echo "✅ 账号信息已设置"
-          if [ -z "${{ secrets.CHROME_PROXY }}" ]; then
-            echo "⚠️ CHROME_PROXY 未设置"
-          else
-            echo "✅ CHROME_PROXY 已设置"
-          fi
-          
-      - name: 执行 Zampto Renew 容器
-        run: |
-          docker run -i \
-            -e USERNAME=${{ secrets.USERNAME }} \
-            -e PASSWORD=${{ secrets.PASSWORD }} \
-            -e TG_TOKEN=${{ secrets.TG_TOKEN }} \
-            -e TG_USERID=${{ secrets.TG_USERID }} \
-            -e CHROME_PROXY=${{ secrets.CHROME_PROXY }} \
-            -v ${{ github.workspace }}/zampto_server.py:/app/zampto_server.py \
-            -v ${{ github.workspace }}/requirements.txt:/app/requirements.txt \
-            -v ${{ github.workspace }}/screenshots:/app/screenshots \
-            --shm-size=2g \
-            ghcr.io/liveqte/zampto_renew:latest \
-            /venv/bin/python zampto_server.py -r 3
+      - name: 📥 下载私库脚本
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/Zampto-Renew-Private
+          token: ${{ secrets.PRIVATE_REPO_TOKEN }}
+          path: private
 
-      # - name: 上传截图产物
-      #   if: always()
-      #   uses: actions/upload-artifact@v4
-      #   with:
-      #     name: screenshots
-      #     path: screenshots
+      - name: 📂 移动脚本
+        run: mv private/zampto_renew.py zampto_renew.py
+
+      - name: 🐍 设置 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: 🛠️ 安装依赖 (包含 xvfb)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y google-chrome-stable xvfb x11-utils xdotool
+          pip install seleniumbase requests
+          seleniumbase install chromedriver
+
+      - name: 🚀 运行续期脚本
+        env:
+          PYTHONIOENCODING: utf-8
+          ZAMPTO_ACCOUNT: ${{ secrets.ZAMPTO_ACCOUNT }}
+          TG_BOT: ${{ secrets.TG_BOT }}
+        run: |
+          xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24" python zampto_renew.py
+
+      - name: 📸 上传调试截图
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-screenshots
+          path: "*.png"
+          retention-days: 3
