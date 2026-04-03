@@ -5,8 +5,8 @@ from seleniumbase import SB
 
 # ================= 配置区域 =================
 # 登录页和续期页面的 URL (请根据实际情况修改)
-LOGIN_URL = "https://zampto.com/login"  # 替换为真实的登录地址
-RENEW_URL = "https://zampto.com/dashboard"  # 替换为真实的面板或续期地址
+LOGIN_URL = "https://auth.zampto.net/sign-in?app_id=bmhk6c8qdqxphlyscztgl"  # 替换为真实的登录地址
+RENEW_URL = "https://dash.zampto.net/server?id=5329"，"https://dash.zampto.net/server?id=5331"  # 替换为真实的面板或续期地址
 
 # ================= 环境变量获取 =================
 ZAMPTO_ACCOUNT = os.environ.get('ZAMPTO_ACCOUNT', '')
