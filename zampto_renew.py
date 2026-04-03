@@ -94,4 +94,4 @@ def process_account(sb, username, password):
                     account_report.append(f"  ℹ️ ID {server_id}: 未找到续期按钮")
             except Exception as e:
                 account_report.append(f"  ❌ ID {server_id}: 处理出错")
-                print(f"
+                print(f" -> [服务 {server_id}] 验证已触发，等待自动提交...")
