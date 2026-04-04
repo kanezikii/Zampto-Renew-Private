@@ -34,6 +34,9 @@ def process_account(sb, username, password):
     print(f"\n[+] 开始处理账号: {username}")
     account_report = [f"👤 账号: <b>{username}</b>"]
     
+    # 【核心修复】精确锁定 Cloudflare 验证码框架，避开 Logto 隐藏的 SSO 框架
+    cf_iframe_selector = 'iframe[src*="cloudflare"], iframe[src*="turnstile"], div.cf-turnstile iframe'
+    
     try:
         # ---------------- 1. 登录 ----------------
         print(" -> 正在访问登录页面...")
@@ -66,31 +69,35 @@ def process_account(sb, username, password):
             
         print(" -> 等待 Cloudflare 验证码框出现...")
         try:
-            # 显式等待 iframe 出现
-            sb.wait_for_element_visible('iframe', timeout=15)
+            # 使用精确选择器等待真正的验证码
+            sb.wait_for_element_visible(cf_iframe_selector, timeout=15)
             print("    [+] 验证码框已出现，准备执行拟人点击...")
             
-            # 【关键修复1】强制将 iframe 滚动到屏幕正中央，防止云端 xvfb 坐标偏移导致点空
-            sb.execute_script("arguments[0].scrollIntoView({block: 'center'});", sb.find_element("iframe"))
+            # 将真正的 CF iframe 滚动到屏幕正中央，防止点偏
+            sb.execute_script("arguments[0].scrollIntoView({block: 'center'});", sb.find_element(cf_iframe_selector))
             time.sleep(2)
             
-            # 【关键修复2】只点一次！绝对不再死循环狂点。
+            # 尝试多重点击方案
             try:
-                sb.uc_click('iframe') # 使用 UC 底层的高权限点击
-            except:
-                pass
+                print("    [+] 尝试 uc_click...")
+                sb.uc_click(cf_iframe_selector)
+            except Exception as e1:
+                print(f"        uc_click 失败: {e1}")
                 
-            time.sleep(1)
+            time.sleep(1.5)
             
             try:
-                sb.uc_gui_click_captcha() # 官方的 PyAutoGUI 备用点击
-            except:
-                pass
+                print("    [+] 尝试 uc_gui_click_captcha...")
+                sb.uc_gui_click_captcha()
+            except Exception as e2:
+                print(f"        uc_gui_click 失败: {e2}")
                 
             print("    [+] 点击动作已完成，耐心等待 25 秒让 CF 验证并自动跳转...")
             time.sleep(25)
-        except Exception:
-            print("    [+] 未等到验证码框，可能直接被信任了，等待跳转...")
+        except Exception as e:
+            # 打印真实报错，防止抓瞎
+            print(f"    [+] 验证码框处理异常: {e}")
+            print("    [+] 兜底等待 15 秒...")
             time.sleep(15)
         
         # 终极安全校验
@@ -129,12 +136,12 @@ def process_account(sb, username, password):
                     time.sleep(4)
                     
                     try:
-                        if sb.is_element_visible('iframe'):
-                            # 弹窗里的验证码也执行居中校准
-                            sb.execute_script("arguments[0].scrollIntoView({block: 'center'});", sb.find_element("iframe"))
+                        # 弹窗里的验证码也使用精确锁定
+                        if sb.is_element_visible(cf_iframe_selector):
+                            sb.execute_script("arguments[0].scrollIntoView({block: 'center'});", sb.find_element(cf_iframe_selector))
                             time.sleep(1)
                             try:
-                                sb.uc_click('iframe')
+                                sb.uc_click(cf_iframe_selector)
                             except:
                                 pass
                             try:
