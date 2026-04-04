@@ -34,9 +34,6 @@ def process_account(sb, username, password):
     print(f"\n[+] 开始处理账号: {username}")
     account_report = [f"👤 账号: <b>{username}</b>"]
     
-    # 【核心修复】精确锁定 Cloudflare 验证码框架，避开 Logto 隐藏的 SSO 框架
-    cf_iframe_selector = 'iframe[src*="cloudflare"], iframe[src*="turnstile"], div.cf-turnstile iframe'
-    
     try:
         # ---------------- 1. 登录 ----------------
         print(" -> 正在访问登录页面...")
@@ -62,43 +59,48 @@ def process_account(sb, username, password):
         time.sleep(1)
         
         print(" -> 点击继续按钮，触发验证码...")
+        submit_btn = 'button[type="submit"], button:contains("Continue"), button:contains("继续"), button:contains("Sign in")'
         try:
-            sb.click('button[type="submit"], button:contains("Continue"), button:contains("继续"), button:contains("Sign in")')
+            sb.click(submit_btn)
         except:
             pass
             
-        print(" -> 等待 Cloudflare 验证码框出现...")
+        # 【核心修复】废弃容易抛异常的 wait_for_element，直接用 sleep 傻等
+        print(" -> 傻等 12 秒，让 Cloudflare 验证码充分加载...")
+        time.sleep(12)
+        
+        print(" -> 准备执行多重拟人点击...")
+        # 强制将“继续”按钮滚动到屏幕中央，这样其上方的验证码必定处于绝佳的可点击位置
         try:
-            # 使用精确选择器等待真正的验证码
-            sb.wait_for_element_visible(cf_iframe_selector, timeout=15)
-            print("    [+] 验证码框已出现，准备执行拟人点击...")
+            sb.execute_script("arguments[0].scrollIntoView({block: 'center'});", sb.find_element(submit_btn))
+        except:
+            pass
+        time.sleep(2)
+        
+        # 方案 A: 官方 GUI 识别点击
+        try:
+            print("    [+] 尝试官方 uc_gui_click_captcha...")
+            sb.uc_gui_click_captcha()
+        except:
+            pass
             
-            # 将真正的 CF iframe 滚动到屏幕正中央，防止点偏
-            sb.execute_script("arguments[0].scrollIntoView({block: 'center'});", sb.find_element(cf_iframe_selector))
-            time.sleep(2)
+        time.sleep(2)
+        
+        # 方案 B: 使用特征识别点击 (加入 challenge 和 title 特征，兼容同源部署的 CF)
+        cf_selector = 'iframe[title*="Cloudflare"], iframe[src*="challenge"], iframe[src*="turnstile"]'
+        try:
+            if sb.is_element_visible(cf_selector):
+                print("    [+] 尝试高权限 uc_click (特征匹配)...")
+                sb.uc_click(cf_selector)
+            else:
+                # 方案 C: 盲点第一个可见的 iframe
+                print("    [+] 尝试高权限 uc_click (盲点模式)...")
+                sb.uc_click('iframe')
+        except:
+            pass
             
-            # 尝试多重点击方案
-            try:
-                print("    [+] 尝试 uc_click...")
-                sb.uc_click(cf_iframe_selector)
-            except Exception as e1:
-                print(f"        uc_click 失败: {e1}")
-                
-            time.sleep(1.5)
-            
-            try:
-                print("    [+] 尝试 uc_gui_click_captcha...")
-                sb.uc_gui_click_captcha()
-            except Exception as e2:
-                print(f"        uc_gui_click 失败: {e2}")
-                
-            print("    [+] 点击动作已完成，耐心等待 25 秒让 CF 验证并自动跳转...")
-            time.sleep(25)
-        except Exception as e:
-            # 打印真实报错，防止抓瞎
-            print(f"    [+] 验证码框处理异常: {e}")
-            print("    [+] 兜底等待 15 秒...")
-            time.sleep(15)
+        print(" -> 点击指令已发送，静候 25 秒等待系统验证并跳转...")
+        time.sleep(25)
         
         # 终极安全校验
         if "dash.zampto.net" not in sb.get_current_url():
@@ -133,21 +135,20 @@ def process_account(sb, username, password):
                 if sb.is_element_visible(renew_btn):
                     sb.click(renew_btn)
                     print(f" -> [服务 {server_id}] 已点击续期，处理弹窗验证码...")
-                    time.sleep(4)
+                    time.sleep(6) # 弹窗验证码也需要充分的加载时间
                     
                     try:
-                        # 弹窗里的验证码也使用精确锁定
-                        if sb.is_element_visible(cf_iframe_selector):
-                            sb.execute_script("arguments[0].scrollIntoView({block: 'center'});", sb.find_element(cf_iframe_selector))
-                            time.sleep(1)
-                            try:
-                                sb.uc_click(cf_iframe_selector)
-                            except:
-                                pass
-                            try:
-                                sb.uc_gui_click_captcha()
-                            except:
-                                pass
+                        sb.uc_gui_click_captcha()
+                    except:
+                        pass
+                        
+                    time.sleep(1)
+                    
+                    try:
+                        if sb.is_element_visible(cf_selector):
+                            sb.uc_click(cf_selector)
+                        else:
+                            sb.uc_click('iframe')
                     except:
                         pass
                     
