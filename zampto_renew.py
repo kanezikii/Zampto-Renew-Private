@@ -46,7 +46,6 @@ def process_account(sb, username, password):
         sb.uc_open_with_reconnect(LOGIN_URL, 4)
         time.sleep(5) 
         
-        # --- 第 1 步：输入邮箱并点击下一步 ---
         print(" -> 填写账号...")
         account_input = 'input[name="identifier"], input[name="email"], input[type="email"], input[type="text"]'
         sb.wait_for_element_visible(account_input, timeout=15)
@@ -56,7 +55,6 @@ def process_account(sb, username, password):
         sb.click('button[type="submit"], button:contains("Sign in"), button.cl-formButtonPrimary')
         time.sleep(5)
         
-        # --- 第 2 步：输入密码并处理验证 ---
         print(" -> 填写密码...")
         sb.wait_for_element_visible('input[type="password"]', timeout=15)
         sb.type('input[type="password"]', password)
@@ -96,7 +94,6 @@ def process_account(sb, username, password):
         print(" -> 登录验证码已点击，静候 25 秒等待系统验证并跳转...")
         time.sleep(25)
         
-        # 终极安全校验
         if "dash.zampto.net" not in sb.get_current_url():
              sb.save_screenshot(f"{username}_login_failed.png")
              return False, f"❌ 账号 <b>{username}</b> 登录失败，未能成功跳转到控制台。"
@@ -112,6 +109,11 @@ def process_account(sb, username, password):
             sb.uc_open_with_reconnect(url, 3)
             time.sleep(8) 
             
+            # 【核心修复 1】强行将网页滚动到底部，把深藏不露的 Renew 模块拉进视野
+            print(" -> 向下滚动页面，寻找续期按钮...")
+            sb.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+            time.sleep(2)
+            
             # 处理 Google 弹窗广告
             if "google_vignette" in sb.get_current_url():
                 print(f" -> [服务 {server_id}] 拦截到广告，尝试跳过...")
@@ -123,18 +125,21 @@ def process_account(sb, username, password):
                 if "google_vignette" in sb.get_current_url():
                     sb.refresh()
                     time.sleep(8)
+                    # 刷新后别忘了再次滚动到底部
+                    sb.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+                    time.sleep(2)
             
             try:
-                renew_btn = 'button:contains("Renew Server")'
+                # 【核心修复 2】兼容 a 标签和 button 标签
+                renew_btn = 'button:contains("Renew Server"), a:contains("Renew Server")'
+                
                 if sb.is_element_visible(renew_btn):
-                    # 把紫色的续期按钮滚动到屏幕中央再点
                     sb.execute_script("arguments[0].scrollIntoView({block: 'center'});", sb.find_element(renew_btn))
                     time.sleep(1)
                     sb.click(renew_btn)
                     print(f" -> [服务 {server_id}] 已点击续期按钮，正在加载弹窗验证码...")
-                    time.sleep(8) # 给弹窗和里面的 CF 充足的加载时间
+                    time.sleep(8) 
                     
-                    # 再次应用我们在登录页大获成功的“居中盲点”大法
                     try:
                         if sb.is_element_visible(cf_selector):
                             sb.execute_script("arguments[0].scrollIntoView({block: 'center'});", sb.find_element(cf_selector))
@@ -163,7 +168,7 @@ def process_account(sb, username, password):
                     account_report.append(f"  ✅ ID {server_id}: 续期成功！(详见运行截图)")
                 else:
                     sb.save_screenshot(f"{username}_server_{server_id}_no_btn.png")
-                    account_report.append(f"  ℹ️ ID {server_id}: 未找到续期按钮 (可能暂无需续期)")
+                    account_report.append(f"  ℹ️ ID {server_id}: 未找到续期按钮 (可能暂无需续期，或刚刚手动续期过)")
             except Exception as e:
                 account_report.append(f"  ❌ ID {server_id}: 处理出错")
                 print(f" -> [服务 {server_id}] 错误: {e}")
