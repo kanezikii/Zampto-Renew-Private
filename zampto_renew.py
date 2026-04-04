@@ -14,8 +14,10 @@ RENEW_URLS = [
 # ================= 环境变量 =================
 ZAMPTO_ACCOUNT = os.environ.get('ZAMPTO_ACCOUNT', '')
 TG_BOT = os.environ.get('TG_BOT', '')
-USE_PROXY = os.environ.get('GOST_PROXY')
-LOCAL_PROXY = "http://127.0.0.1:8080" if USE_PROXY else None
+USE_PROXY = os.environ.get('USE_PROXY') == 'true'
+
+# v2rayN 导出的 JSON 默认会在本地 10808 端口开启 SOCKS5 代理
+LOCAL_PROXY = "socks5://127.0.0.1:10808" if USE_PROXY else None
 
 def send_telegram_msg(message):
     """发送 Telegram 通知"""
