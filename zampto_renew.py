@@ -59,36 +59,38 @@ def process_account(sb, username, password):
         sb.type('input[type="password"]', password)
         time.sleep(1)
         
-        # 【核心修复】：先点击 Continue 按钮，召唤出 Cloudflare 验证码
-        print(" -> 点击继续按钮，向服务器发送请求并触发验证码...")
+        print(" -> 点击继续按钮，触发验证码...")
         try:
             sb.click('button[type="submit"], button:contains("Continue"), button:contains("继续"), button:contains("Sign in")')
         except:
             pass
             
-        print(" -> 等待 Cloudflare 验证码弹出 (最多等 10 秒)...")
-        try:
-            # 强制等待 iframe (验证码框) 加载出来
-            sb.wait_for_element_visible('iframe', timeout=10)
-            print("    [+] 验证码已弹出，尝试点击...")
-            time.sleep(2) # 稍微等盾牌动画渲染一下
+        print(" -> 进入智能轮询模式，死磕验证码 (最长等待 40 秒)...")
+        # 采用轮询机制，不断尝试寻找和点击验证码，直到网址发生变化
+        for i in range(16):
+            if "dash.zampto.net" in sb.get_current_url():
+                print("    [+] 网址已变更，成功绕过验证码进入系统！")
+                break
+                
             try:
-                sb.uc_gui_click_captcha()
+                if sb.is_element_visible('iframe'):
+                    sb.uc_gui_click_captcha()
             except:
-                try:
+                pass
+                
+            try:
+                # 备用物理点击
+                if sb.is_element_visible('iframe'):
                     sb.click('iframe')
-                except:
-                    pass
-            print("    [+] 验证码已点击，静候系统自动跳转到控制台 (最长等待 20 秒)...")
-            time.sleep(20)
-        except Exception:
-            print("    [+] 未检测到验证码弹出 (可能已被信任)，直接等待跳转...")
-            time.sleep(15)
+            except:
+                pass
+                
+            time.sleep(2.5) # 每隔 2.5 秒扫荡一次，给网页转圈反应的时间
         
-        # 严格的安全校验
+        # 终极安全校验
         if "dash.zampto.net" not in sb.get_current_url():
              sb.save_screenshot(f"{username}_login_failed.png")
-             return False, f"❌ 账号 <b>{username}</b> 登录失败，未能成功跳转到控制台。"
+             return False, f"❌ 账号 <b>{username}</b> 登录失败，死磕 40 秒后未能成功跳转到控制台。"
 
         print(" -> 登录成功！")
         sb.save_screenshot(f"{username}_login_ok.png")
@@ -117,20 +119,21 @@ def process_account(sb, username, password):
                 renew_btn = 'button:contains("Renew Server")'
                 if sb.is_element_visible(renew_btn):
                     sb.click(renew_btn)
-                    print(f" -> [服务 {server_id}] 已点击续期，处理弹窗...")
-                    time.sleep(4)
+                    print(f" -> [服务 {server_id}] 已点击续期，死磕弹窗验证码...")
+                    time.sleep(3)
                     
-                    try:
-                        sb.uc_gui_click_captcha()
-                    except:
+                    # 弹窗里的验证码也换成轮询模式，确保万无一失
+                    for j in range(6): 
                         try:
                             if sb.is_element_visible('iframe'):
-                                sb.click('iframe')
+                                sb.uc_gui_click_captcha()
                         except:
-                            pass
-                    
-                    print(f" -> [服务 {server_id}] 续期请求已触发，等待 15 秒确认...")
-                    time.sleep(15) 
+                            try:
+                                if sb.is_element_visible('iframe'):
+                                    sb.click('iframe')
+                            except:
+                                pass
+                        time.sleep(2.5)
                     
                     sb.save_screenshot(f"{username}_server_{server_id}_done.png")
                     account_report.append(f"  ✅ ID {server_id}: 续期已提交")
