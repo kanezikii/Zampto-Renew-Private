@@ -33,12 +33,11 @@ def process_account(sb, username, password):
     """处理单个账号及其下的所有服务续期"""
     print(f"\n[+] 开始处理账号: {username}")
     account_report = [f"👤 账号: <b>{username}</b>"]
-    cf_iframe_selector = 'iframe[src*="challenges.cloudflare.com"]'
     
     try:
         # ---------------- 1. 登录 ----------------
         print(" -> 正在访问登录页面...")
-        sb.maximize_window() # 【关键优化】最大化窗口，防止坐标偏移
+        sb.maximize_window()
         sb.uc_open_with_reconnect(LOGIN_URL, 4)
         time.sleep(5) 
         
@@ -60,34 +59,24 @@ def process_account(sb, username, password):
         sb.type('input[type="password"]', password)
         
         print(" -> 等待 Cloudflare 盾牌加载...")
+        time.sleep(5)
+        
+        print(" -> 尝试点击验证码...")
         try:
-            # 强制等待 CF 的 iframe 出现
-            sb.wait_for_element_visible(cf_iframe_selector, timeout=10)
-            time.sleep(3) # 等待内部动画渲染完成
-            
-            print(" -> 尝试点击验证码 (方案 A: 拟人化点击)...")
-            sb.uc_click(cf_iframe_selector)
-            time.sleep(2)
-            
-            print(" -> 尝试点击验证码 (方案 B: 物理坐标点击)...")
+            # 使用官方拟人化点击
             sb.uc_gui_click_captcha()
-        except Exception as e:
-            print(f" -> 未检测到验证码或点击报错: {e}")
-            
-        print(" -> 等待验证通过 (休眠 12 秒)...")
-        time.sleep(12)
-            
-        print(" -> 提交密码...")
-        sb.click('button[type="submit"], button:contains("Continue"), button:contains("继续"), button:contains("Sign in")')
+        except:
+            # 备用方案：直接找页面上的 iframe 并点击
+            try:
+                if sb.is_element_visible('iframe'):
+                    sb.click('iframe')
+            except:
+                pass
         
-        print(" -> 等待控制台加载...")
-        time.sleep(15) 
+        # 【核心修正】：根据你的测试，这里不再点击 Continue，而是直接等待系统自动跳转！
+        print(" -> 验证码已点击，等待系统自动跳转到控制台 (最长等待 30 秒)...")
+        sb.wait_for_url_contains('dash.zampto.net', timeout=30)
         
-        # 校验是否成功登录
-        if "dash.zampto.net" not in sb.get_current_url():
-             sb.save_screenshot(f"{username}_login_failed.png")
-             return False, f"❌ 账号 <b>{username}</b> 登录失败，验证码未通过或密码错误。"
-
         print(" -> 登录成功！")
         sb.save_screenshot(f"{username}_login_ok.png")
 
@@ -99,25 +88,41 @@ def process_account(sb, username, password):
             sb.uc_open_with_reconnect(url, 3)
             time.sleep(6) 
             
+            # 【新增】：处理 Google 弹窗广告
+            current_url = sb.get_current_url()
+            if "google_vignette" in current_url:
+                print(f" -> [服务 {server_id}] 检测到屏幕中间的弹窗广告！")
+                try:
+                    # 尝试点击 Close
+                    sb.click('div:contains("Close"), span:contains("Close")')
+                    time.sleep(2)
+                except:
+                    pass
+                
+                # 如果广告还没关掉，使用最稳妥的刷新大法（刷新会直接绕过插页广告加载原网页）
+                if "google_vignette" in sb.get_current_url():
+                    print(f" -> [服务 {server_id}] 使用刷新页面绕过广告...")
+                    sb.refresh()
+                    time.sleep(6)
+            
             try:
                 renew_btn = 'button:contains("Renew Server")'
                 if sb.is_element_visible(renew_btn):
                     sb.click(renew_btn)
                     print(f" -> [服务 {server_id}] 已点击续期，处理验证码...")
                     
+                    time.sleep(4)
                     try:
-                        sb.wait_for_element_visible(cf_iframe_selector, timeout=10)
-                        time.sleep(3)
-                        
-                        print(f" -> [服务 {server_id}] 尝试拟人化点击...")
-                        sb.uc_click(cf_iframe_selector)
-                        time.sleep(2)
                         sb.uc_gui_click_captcha()
                     except:
-                        pass
+                        try:
+                            if sb.is_element_visible('iframe'):
+                                sb.click('iframe')
+                        except:
+                            pass
                     
                     print(f" -> [服务 {server_id}] 验证已触发，等待自动提交...")
-                    time.sleep(15) # 弹窗的等待时间稍微加长一点
+                    time.sleep(15) 
                     
                     sb.save_screenshot(f"{username}_server_{server_id}_done.png")
                     account_report.append(f"  ✅ ID {server_id}: 续期已提交")
@@ -142,7 +147,6 @@ def main():
     accounts = [line.strip() for line in ZAMPTO_ACCOUNT.split('\n') if line.strip()]
     final_reports = ["<b>Zampto 自动化续期报告</b>"]
 
-    # 依然保持 uc=True 和 headless=False (依托于工作流里的 xvfb)
     with SB(uc=True, proxy=LOCAL_PROXY, headless=False) as sb:
         for acc in accounts:
             if ':' not in acc: continue
