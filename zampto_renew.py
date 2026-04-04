@@ -59,17 +59,30 @@ def process_account(sb, username, password):
         sb.type('input[type="password"]', password)
         
         print(" -> 等待 Cloudflare 盾牌加载...")
-        time.sleep(4)
+        time.sleep(5)
         
+        # 【新增】：向下滚动页面，确保验证码在可视范围内
+        sb.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+        time.sleep(1)
+        
+        print(" -> 尝试点击验证码 (方案 A)...")
         try:
-            print(" -> 尝试点击验证码...")
-            sb.uc_gui_click_captcha() # 点击密码页的验证码空白框
+            sb.uc_gui_click_captcha()
         except:
             pass
             
-        # 【核心修复】给 CF 验证码足够的时间转圈变绿
-        print(" -> 等待验证通过 (休眠 10 秒)...")
-        time.sleep(10)
+        time.sleep(2)
+        
+        # 【新增】：备用点击方案，直接强制点击页面上的 iframe（即验证码本身）
+        print(" -> 尝试点击验证码 (方案 B - 强制点击)...")
+        try:
+            if sb.is_element_visible('iframe'):
+                sb.click('iframe')
+        except:
+            pass
+            
+        print(" -> 等待验证通过 (休眠 12 秒)...")
+        time.sleep(12)
             
         print(" -> 提交密码...")
         sb.click('button[type="submit"], button:contains("Continue"), button:contains("继续"), button:contains("Sign in")')
@@ -77,7 +90,7 @@ def process_account(sb, username, password):
         print(" -> 等待控制台加载...")
         time.sleep(15) 
         
-        # 简单校验是否成功登录（判断当前URL是否包含 dash.zampto.net）
+        # 校验是否成功登录
         if "dash.zampto.net" not in sb.get_current_url():
              sb.save_screenshot(f"{username}_login_failed.png")
              return False, f"❌ 账号 <b>{username}</b> 登录失败，卡在验证码或密码错误。"
@@ -100,8 +113,16 @@ def process_account(sb, username, password):
                     print(f" -> [服务 {server_id}] 已点击续期，处理验证码...")
                     
                     time.sleep(4)
+                    
+                    # 弹窗里的验证码同样加上双重点击保险
                     try:
                         sb.uc_gui_click_captcha()
+                    except:
+                        pass
+                    time.sleep(1)
+                    try:
+                        if sb.is_element_visible('iframe'):
+                            sb.click('iframe')
                     except:
                         pass
                     
