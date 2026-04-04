@@ -4,10 +4,8 @@ import requests
 from seleniumbase import SB
 
 # ================= 配置区域 =================
-# 使用你提供的真实登录地址
 LOGIN_URL = "https://auth.zampto.net/sign-in?app_id=bmhk6c8qdqxphlyscztgl"
 
-# 具体的服务续期页面列表（你可以根据需要继续添加）
 RENEW_URLS = [
     "https://dash.zampto.net/server?id=5329",
     "https://dash.zampto.net/server?id=5331"
@@ -40,7 +38,7 @@ def process_account(sb, username, password):
         # ---------------- 1. 登录 ----------------
         print(" -> 正在访问登录页面...")
         sb.uc_open_with_reconnect(LOGIN_URL, 4)
-        time.sleep(5)
+        time.sleep(5) 
         
         # --- 第 1 步：输入邮箱并点击下一步 ---
         print(" -> 填写账号...")
@@ -60,21 +58,30 @@ def process_account(sb, username, password):
         sb.wait_for_element_visible('input[type="password"]', timeout=15)
         sb.type('input[type="password"]', password)
         
-        print(" -> 等待登录页 Cloudflare 验证...")
+        print(" -> 等待 Cloudflare 盾牌加载...")
         time.sleep(4)
+        
         try:
+            print(" -> 尝试点击验证码...")
             sb.uc_gui_click_captcha() # 点击密码页的验证码空白框
         except:
             pass
             
+        # 【核心修复】给 CF 验证码足够的时间转圈变绿
+        print(" -> 等待验证通过 (休眠 10 秒)...")
+        time.sleep(10)
+            
         print(" -> 提交密码...")
-        # 加入 "Continue" 匹配你截图中的英文按钮
         sb.click('button[type="submit"], button:contains("Continue"), button:contains("继续"), button:contains("Sign in")')
         
-        # 修复了 BaseCase 报错，使用最稳妥的强制休眠等待登录跳转完成
         print(" -> 等待控制台加载...")
         time.sleep(15) 
         
+        # 简单校验是否成功登录（判断当前URL是否包含 dash.zampto.net）
+        if "dash.zampto.net" not in sb.get_current_url():
+             sb.save_screenshot(f"{username}_login_failed.png")
+             return False, f"❌ 账号 <b>{username}</b> 登录失败，卡在验证码或密码错误。"
+
         print(" -> 登录成功！")
         sb.save_screenshot(f"{username}_login_ok.png")
 
@@ -84,10 +91,9 @@ def process_account(sb, username, password):
             print(f" -> [服务 {server_id}] 正在打开面板...")
             
             sb.uc_open_with_reconnect(url, 3)
-            time.sleep(5) # 给面板加载留足时间
+            time.sleep(5) 
             
             try:
-                # 寻找紫色的续期按钮
                 renew_btn = 'button:contains("Renew Server")'
                 if sb.is_element_visible(renew_btn):
                     sb.click(renew_btn)
@@ -95,12 +101,12 @@ def process_account(sb, username, password):
                     
                     time.sleep(4)
                     try:
-                        sb.uc_gui_click_captcha() # 点击弹窗里的空白框
+                        sb.uc_gui_click_captcha()
                     except:
                         pass
                     
                     print(f" -> [服务 {server_id}] 验证已触发，等待自动提交...")
-                    time.sleep(10)
+                    time.sleep(12)
                     
                     sb.save_screenshot(f"{username}_server_{server_id}_done.png")
                     account_report.append(f"  ✅ ID {server_id}: 续期已提交")
@@ -125,7 +131,6 @@ def main():
     accounts = [line.strip() for line in ZAMPTO_ACCOUNT.split('\n') if line.strip()]
     final_reports = ["<b>Zampto 自动化续期报告</b>"]
 
-    # 关键配置：uc=True 绕过检测，headless=False 配合 xvfb 提高成功率
     with SB(uc=True, proxy=LOCAL_PROXY, headless=False) as sb:
         for acc in accounts:
             if ':' not in acc: continue
