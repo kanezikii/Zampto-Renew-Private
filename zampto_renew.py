@@ -121,42 +121,36 @@ def process_account(sb, username, password):
             sb.uc_open_with_reconnect(url, 3)
             time.sleep(8) 
             
-            # 【终极扫雷模式】：核弹级广告清理
-            print(" -> 执行强力广告及问卷弹窗清理...")
-            try:
-                # 绝杀 1: 暴力移除所有非 Cloudflare 的 iframe (专门对付 Google 问卷广告)
-                sb.execute_script("""
-                    document.querySelectorAll('iframe').forEach(iframe => {
-                        let src = iframe.src.toLowerCase();
-                        if (!src.includes('cloudflare') && !src.includes('turnstile') && !src.includes('challenge')) {
-                            iframe.remove();
-                        }
-                    });
-                """)
-                time.sleep(1)
-                
-                # 绝杀 2: 使用高权限 JS 点击所有带 Close/Hide 字样的元素
-                for target in ['div:contains("Close")', 'span:contains("Close")', 'a:contains("Close")', 'button:contains("Hide")']:
-                    if sb.is_element_visible(target):
-                        sb.js_click(target)
-                        time.sleep(0.5)
-            except:
-                pass
+            # 【全新精准扫雷模式】：对付 Google 问卷及悬浮广告
+            print(" -> 等待并检查可能出现的悬浮广告 (最多检查 3 次)...")
+            for i in range(3):
+                time.sleep(3) # 给广告充足的加载和弹出动画时间
+                try:
+                    ad_closed = False
+                    # 遍历可能的 Close 按钮形式
+                    for target in ['div:contains("Close")', 'span:contains("Close")', 'a:contains("Close")', 'button:contains("Hide")']:
+                        if sb.is_element_visible(target):
+                            print(f"    [+] 第 {i+1} 次发现干扰广告，正在点击右上角 Close...")
+                            sb.js_click(target)  # 使用 js_click 确保点击生效
+                            time.sleep(2)
+                            ad_closed = True
+                            break # 关掉一个后，跳出当前 target 循环，进入下一次全盘检查
+                    
+                    if not ad_closed:
+                        print("    [+] 页面干净，未检测到新的悬浮广告。")
+                        break # 如果这一轮没找到任何广告，说明清理干净了，安全退出循环
+                except Exception as e:
+                    pass
             
             print(" -> 向下滚动页面，寻找续期按钮...")
             sb.execute_script("window.scrollTo(0, document.body.scrollHeight);")
             time.sleep(2)
             
-            # 处理全屏跳转广告
+            # 处理全屏跳转广告 (Vignette)
             if "google_vignette" in sb.get_current_url():
-                print(f" -> [服务 {server_id}] 拦截到全屏广告，尝试刷新跳过...")
+                print(f" -> [服务 {server_id}] 拦截到全屏网址跳转广告，尝试刷新跳过...")
                 sb.refresh()
                 time.sleep(8)
-                # 刷新后再次执行强力清理和滚动
-                try:
-                    sb.execute_script("""document.querySelectorAll('iframe').forEach(f => { let s = f.src.toLowerCase(); if (!s.includes('cloudflare') && !s.includes('turnstile') && !s.includes('challenge')) f.remove(); });""")
-                except:
-                    pass
                 sb.execute_script("window.scrollTo(0, document.body.scrollHeight);")
                 time.sleep(2)
             
@@ -167,7 +161,7 @@ def process_account(sb, username, password):
                     sb.execute_script("arguments[0].scrollIntoView({block: 'center'});", sb.find_element(renew_btn))
                     time.sleep(1)
                     
-                    # 【核心修复】：不再模拟鼠标物理点击，使用 js_click 无视所有可能残存的透明遮挡层！
+                    # 依然使用 js_click，无视任何残存的微小透明遮挡
                     sb.js_click(renew_btn)
                     print(f" -> [服务 {server_id}] 已强制点击续期按钮，正在加载弹窗验证码...")
                     time.sleep(8) 
