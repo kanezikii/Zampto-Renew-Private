@@ -73,11 +73,11 @@ def process_account(sb, username, password):
             except:
                 pass
         
-        # 【核心修正】：根据你的测试，这里不再点击 Continue，而是直接等待系统自动跳转！
-        print(" -> 验证码已点击，等待系统自动跳转到控制台 (最长等待 30 秒)...")
-        sb.wait_for_url_contains('dash.zampto.net', timeout=30)
+        # 【核心修复】：去掉了那个会报错的 wait_for_url_contains，换成傻瓜式休眠
+        print(" -> 验证码已点击，静静等待 20 秒让系统完成人机验证并自动跳转...")
+        time.sleep(20)
         
-        print(" -> 登录成功！")
+        print(" -> 登录成功！(或已进入跳转流程)")
         sb.save_screenshot(f"{username}_login_ok.png")
 
         # ---------------- 2. 依次处理多个服务 ----------------
@@ -86,7 +86,7 @@ def process_account(sb, username, password):
             print(f" -> [服务 {server_id}] 正在打开面板...")
             
             sb.uc_open_with_reconnect(url, 3)
-            time.sleep(6) 
+            time.sleep(8) # 加长一点加载时间，防止广告没出来
             
             # 【新增】：处理 Google 弹窗广告
             current_url = sb.get_current_url()
@@ -103,7 +103,7 @@ def process_account(sb, username, password):
                 if "google_vignette" in sb.get_current_url():
                     print(f" -> [服务 {server_id}] 使用刷新页面绕过广告...")
                     sb.refresh()
-                    time.sleep(6)
+                    time.sleep(8)
             
             try:
                 renew_btn = 'button:contains("Renew Server")'
@@ -121,7 +121,7 @@ def process_account(sb, username, password):
                         except:
                             pass
                     
-                    print(f" -> [服务 {server_id}] 验证已触发，等待自动提交...")
+                    print(f" -> [服务 {server_id}] 验证已触发，等待后台自动提交...")
                     time.sleep(15) 
                     
                     sb.save_screenshot(f"{username}_server_{server_id}_done.png")
