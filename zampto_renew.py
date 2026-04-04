@@ -50,7 +50,6 @@ def process_account(sb, username, password):
         print(" -> 点击第一步的继续按钮...")
         sb.click('button[type="submit"], button:contains("Sign in"), button.cl-formButtonPrimary')
         
-        # 等待密码页面加载出来
         time.sleep(5)
         
         # --- 第 2 步：输入密码并处理验证 ---
@@ -65,32 +64,39 @@ def process_account(sb, username, password):
         except:
             pass
             
-        print(" -> 进入智能轮询模式，死磕验证码 (最长等待 40 秒)...")
-        # 采用轮询机制，不断尝试寻找和点击验证码，直到网址发生变化
-        for i in range(16):
-            if "dash.zampto.net" in sb.get_current_url():
-                print("    [+] 网址已变更，成功绕过验证码进入系统！")
-                break
-                
+        print(" -> 等待 Cloudflare 验证码框出现...")
+        try:
+            # 显式等待 iframe 出现
+            sb.wait_for_element_visible('iframe', timeout=15)
+            print("    [+] 验证码框已出现，准备执行拟人点击...")
+            
+            # 【关键修复1】强制将 iframe 滚动到屏幕正中央，防止云端 xvfb 坐标偏移导致点空
+            sb.execute_script("arguments[0].scrollIntoView({block: 'center'});", sb.find_element("iframe"))
+            time.sleep(2)
+            
+            # 【关键修复2】只点一次！绝对不再死循环狂点。
             try:
-                if sb.is_element_visible('iframe'):
-                    sb.uc_gui_click_captcha()
+                sb.uc_click('iframe') # 使用 UC 底层的高权限点击
             except:
                 pass
                 
+            time.sleep(1)
+            
             try:
-                # 备用物理点击
-                if sb.is_element_visible('iframe'):
-                    sb.click('iframe')
+                sb.uc_gui_click_captcha() # 官方的 PyAutoGUI 备用点击
             except:
                 pass
                 
-            time.sleep(2.5) # 每隔 2.5 秒扫荡一次，给网页转圈反应的时间
+            print("    [+] 点击动作已完成，耐心等待 25 秒让 CF 验证并自动跳转...")
+            time.sleep(25)
+        except Exception:
+            print("    [+] 未等到验证码框，可能直接被信任了，等待跳转...")
+            time.sleep(15)
         
         # 终极安全校验
         if "dash.zampto.net" not in sb.get_current_url():
              sb.save_screenshot(f"{username}_login_failed.png")
-             return False, f"❌ 账号 <b>{username}</b> 登录失败，死磕 40 秒后未能成功跳转到控制台。"
+             return False, f"❌ 账号 <b>{username}</b> 登录失败，未能成功跳转到控制台。"
 
         print(" -> 登录成功！")
         sb.save_screenshot(f"{username}_login_ok.png")
@@ -119,21 +125,27 @@ def process_account(sb, username, password):
                 renew_btn = 'button:contains("Renew Server")'
                 if sb.is_element_visible(renew_btn):
                     sb.click(renew_btn)
-                    print(f" -> [服务 {server_id}] 已点击续期，死磕弹窗验证码...")
-                    time.sleep(3)
+                    print(f" -> [服务 {server_id}] 已点击续期，处理弹窗验证码...")
+                    time.sleep(4)
                     
-                    # 弹窗里的验证码也换成轮询模式，确保万无一失
-                    for j in range(6): 
-                        try:
-                            if sb.is_element_visible('iframe'):
-                                sb.uc_gui_click_captcha()
-                        except:
+                    try:
+                        if sb.is_element_visible('iframe'):
+                            # 弹窗里的验证码也执行居中校准
+                            sb.execute_script("arguments[0].scrollIntoView({block: 'center'});", sb.find_element("iframe"))
+                            time.sleep(1)
                             try:
-                                if sb.is_element_visible('iframe'):
-                                    sb.click('iframe')
+                                sb.uc_click('iframe')
                             except:
                                 pass
-                        time.sleep(2.5)
+                            try:
+                                sb.uc_gui_click_captcha()
+                            except:
+                                pass
+                    except:
+                        pass
+                    
+                    print(f" -> [服务 {server_id}] 续期验证已触发，等待 15 秒确认...")
+                    time.sleep(15) 
                     
                     sb.save_screenshot(f"{username}_server_{server_id}_done.png")
                     account_report.append(f"  ✅ ID {server_id}: 续期已提交")
