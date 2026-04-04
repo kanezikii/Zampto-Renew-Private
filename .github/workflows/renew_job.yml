@@ -3,7 +3,7 @@ name: Zampto-Renew
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 1,13 * * *'   # 每天 UTC 时间 01:00 和 13:00 (即北京时间 09:00 和 21:00) 各执行一次
+    - cron: '0 1,13 * * *'   # 每天北京时间 9:00 和 21:00 执行
 
 jobs:
   run_zampto_renew:
@@ -29,18 +29,42 @@ jobs:
         with:
           python-version: '3.10'
 
-      - name: 🛠️ 安装依赖 (包含 xvfb)
+      - name: 🛠️ 安装系统与 Python 依赖
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y google-chrome-stable xvfb x11-utils xdotool
           pip install seleniumbase requests
           seleniumbase install chromedriver
 
+      - name: 🛡️ 启动 Xray 代理转发
+        if: ${{ secrets.XRAY_CONFIG != '' }}
+        env:
+          XRAY_CONFIG: ${{ secrets.XRAY_CONFIG }}
+        run: |
+          echo "📦 正在下载并配置 Xray..."
+          wget -q https://github.com/XTLS/Xray-core/releases/latest/download/Xray-linux-64.zip
+          unzip -q Xray-linux-64.zip -d xray_bin
+          chmod +x xray_bin/xray
+          
+          # 将 Secret 中的 JSON 写入配置文件
+          echo "$XRAY_CONFIG" > xray_bin/config.json
+          
+          # 后台启动 Xray
+          nohup ./xray_bin/xray run -c ./xray_bin/config.json > xray.log 2>&1 &
+          sleep 4
+          
+          # 测试代理是否通畅 (v2rayN 导出的默认本地 SOCKS 端口通常是 10808)
+          echo "🌐 测试通过代理获取的出口 IP:"
+          curl -s -x socks5h://127.0.0.1:10808 https://api.ipify.org || echo "⚠️ 代理测试超时或失败，但将继续执行"
+          echo -e "\n✅ Xray 代理服务已就绪"
+
       - name: 🚀 运行续期脚本
         env:
           PYTHONIOENCODING: utf-8
           ZAMPTO_ACCOUNT: ${{ secrets.ZAMPTO_ACCOUNT }}
           TG_BOT: ${{ secrets.TG_BOT }}
+          # 告诉 Python 脚本是否启用了代理
+          USE_PROXY: ${{ secrets.XRAY_CONFIG != '' && 'true' || 'false' }}
         run: |
           xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24" python zampto_renew.py
 
