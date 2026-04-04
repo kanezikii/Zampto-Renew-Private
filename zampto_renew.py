@@ -15,6 +15,8 @@ RENEW_URLS = [
 ZAMPTO_ACCOUNT = os.environ.get('ZAMPTO_ACCOUNT', '')
 TG_BOT = os.environ.get('TG_BOT', '')
 USE_PROXY = os.environ.get('USE_PROXY') == 'true'
+
+# 使用 Xray 代理的默认本地 SOCKS5 端口
 LOCAL_PROXY = "socks5://127.0.0.1:10808" if USE_PROXY else None
 
 def send_telegram_msg(message):
@@ -34,6 +36,9 @@ def process_account(sb, username, password):
     print(f"\n[+] 开始处理账号: {username}")
     account_report = [f"👤 账号: <b>{username}</b>"]
     
+    # 锁定真正 CF 验证码的特征选择器
+    cf_selector = 'iframe[title*="Cloudflare"], iframe[src*="challenge"], iframe[src*="turnstile"]'
+    
     try:
         # ---------------- 1. 登录 ----------------
         print(" -> 正在访问登录页面...")
@@ -49,7 +54,6 @@ def process_account(sb, username, password):
         
         print(" -> 点击第一步的继续按钮...")
         sb.click('button[type="submit"], button:contains("Sign in"), button.cl-formButtonPrimary')
-        
         time.sleep(5)
         
         # --- 第 2 步：输入密码并处理验证 ---
@@ -65,41 +69,31 @@ def process_account(sb, username, password):
         except:
             pass
             
-        # 【核心修复】废弃容易抛异常的 wait_for_element，直接用 sleep 傻等
         print(" -> 傻等 12 秒，让 Cloudflare 验证码充分加载...")
         time.sleep(12)
         
         print(" -> 准备执行多重拟人点击...")
-        # 强制将“继续”按钮滚动到屏幕中央，这样其上方的验证码必定处于绝佳的可点击位置
         try:
             sb.execute_script("arguments[0].scrollIntoView({block: 'center'});", sb.find_element(submit_btn))
         except:
             pass
         time.sleep(2)
         
-        # 方案 A: 官方 GUI 识别点击
         try:
-            print("    [+] 尝试官方 uc_gui_click_captcha...")
             sb.uc_gui_click_captcha()
         except:
             pass
-            
         time.sleep(2)
         
-        # 方案 B: 使用特征识别点击 (加入 challenge 和 title 特征，兼容同源部署的 CF)
-        cf_selector = 'iframe[title*="Cloudflare"], iframe[src*="challenge"], iframe[src*="turnstile"]'
         try:
             if sb.is_element_visible(cf_selector):
-                print("    [+] 尝试高权限 uc_click (特征匹配)...")
                 sb.uc_click(cf_selector)
             else:
-                # 方案 C: 盲点第一个可见的 iframe
-                print("    [+] 尝试高权限 uc_click (盲点模式)...")
                 sb.uc_click('iframe')
         except:
             pass
             
-        print(" -> 点击指令已发送，静候 25 秒等待系统验证并跳转...")
+        print(" -> 登录验证码已点击，静候 25 秒等待系统验证并跳转...")
         time.sleep(25)
         
         # 终极安全校验
@@ -133,16 +127,26 @@ def process_account(sb, username, password):
             try:
                 renew_btn = 'button:contains("Renew Server")'
                 if sb.is_element_visible(renew_btn):
+                    # 把紫色的续期按钮滚动到屏幕中央再点
+                    sb.execute_script("arguments[0].scrollIntoView({block: 'center'});", sb.find_element(renew_btn))
+                    time.sleep(1)
                     sb.click(renew_btn)
-                    print(f" -> [服务 {server_id}] 已点击续期，处理弹窗验证码...")
-                    time.sleep(6) # 弹窗验证码也需要充分的加载时间
+                    print(f" -> [服务 {server_id}] 已点击续期按钮，正在加载弹窗验证码...")
+                    time.sleep(8) # 给弹窗和里面的 CF 充足的加载时间
+                    
+                    # 再次应用我们在登录页大获成功的“居中盲点”大法
+                    try:
+                        if sb.is_element_visible(cf_selector):
+                            sb.execute_script("arguments[0].scrollIntoView({block: 'center'});", sb.find_element(cf_selector))
+                    except:
+                        pass
+                    time.sleep(2)
                     
                     try:
                         sb.uc_gui_click_captcha()
                     except:
                         pass
-                        
-                    time.sleep(1)
+                    time.sleep(2)
                     
                     try:
                         if sb.is_element_visible(cf_selector):
@@ -152,11 +156,11 @@ def process_account(sb, username, password):
                     except:
                         pass
                     
-                    print(f" -> [服务 {server_id}] 续期验证已触发，等待 15 秒确认...")
-                    time.sleep(15) 
+                    print(f" -> [服务 {server_id}] 弹窗验证码已点击，等待 25 秒让系统自动跳转完成续期...")
+                    time.sleep(25) 
                     
                     sb.save_screenshot(f"{username}_server_{server_id}_done.png")
-                    account_report.append(f"  ✅ ID {server_id}: 续期已提交")
+                    account_report.append(f"  ✅ ID {server_id}: 续期成功！(详见运行截图)")
                 else:
                     sb.save_screenshot(f"{username}_server_{server_id}_no_btn.png")
                     account_report.append(f"  ℹ️ ID {server_id}: 未找到续期按钮 (可能暂无需续期)")
