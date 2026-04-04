@@ -47,7 +47,7 @@ def process_account(sb, username, password):
         sb.wait_for_element_visible(account_input, timeout=15)
         sb.type(account_input, username)
         
-        print(" -> 点击继续...")
+        print(" -> 点击第一步的继续按钮...")
         sb.click('button[type="submit"], button:contains("Sign in"), button.cl-formButtonPrimary')
         
         # 等待密码页面加载出来
@@ -57,51 +57,59 @@ def process_account(sb, username, password):
         print(" -> 填写密码...")
         sb.wait_for_element_visible('input[type="password"]', timeout=15)
         sb.type('input[type="password"]', password)
+        time.sleep(3)
         
-        print(" -> 等待 Cloudflare 盾牌加载...")
-        time.sleep(5)
-        
-        print(" -> 尝试点击验证码...")
-        try:
-            # 使用官方拟人化点击
-            sb.uc_gui_click_captcha()
-        except:
-            # 备用方案：直接找页面上的 iframe 并点击
+        print(" -> 正在智能处理人机验证与登录逻辑...")
+        # 逻辑 A：如果页面上出现了验证码 iframe，尝试去点击它
+        if sb.is_element_visible('iframe'):
+            print("    [+] 检测到 Cloudflare 验证码，尝试点击...")
             try:
-                if sb.is_element_visible('iframe'):
+                sb.uc_gui_click_captcha()
+            except:
+                try:
                     sb.click('iframe')
+                except:
+                    pass
+            # 给验证码充足的时间转圈并尝试自动跳转
+            time.sleep(12) 
+        else:
+             print("    [+] 未检测到验证码，直接进入下一步...")
+
+        # 逻辑 B：无论上面发没发生，如果此时还没有跳转到 dash 域名，强行点击 Continue
+        if "dash.zampto.net" not in sb.get_current_url():
+            print("    [+] 页面尚未自动跳转，强制点击 Continue 按钮...")
+            try:
+                sb.click('button[type="submit"], button:contains("Continue"), button:contains("继续"), button:contains("Sign in")')
             except:
                 pass
+            # 等待网络请求跳转
+            time.sleep(12)
         
-        # 【核心修复】：去掉了那个会报错的 wait_for_url_contains，换成傻瓜式休眠
-        print(" -> 验证码已点击，静静等待 20 秒让系统完成人机验证并自动跳转...")
-        time.sleep(20)
-        
-        print(" -> 登录成功！(或已进入跳转流程)")
+        # 逻辑 C：严格的安全校验，没进去直接掐断，防止对着空气续期
+        if "dash.zampto.net" not in sb.get_current_url():
+             sb.save_screenshot(f"{username}_login_failed.png")
+             return False, f"❌ 账号 <b>{username}</b> 登录失败，未能成功跳转到控制台。"
+
+        print(" -> 登录成功！")
         sb.save_screenshot(f"{username}_login_ok.png")
 
         # ---------------- 2. 依次处理多个服务 ----------------
         for idx, url in enumerate(RENEW_URLS):
             server_id = url.split('=')[-1]
-            print(f" -> [服务 {server_id}] 正在打开面板...")
+            print(f"\n -> [服务 {server_id}] 正在打开面板...")
             
             sb.uc_open_with_reconnect(url, 3)
-            time.sleep(8) # 加长一点加载时间，防止广告没出来
+            time.sleep(8) 
             
-            # 【新增】：处理 Google 弹窗广告
-            current_url = sb.get_current_url()
-            if "google_vignette" in current_url:
-                print(f" -> [服务 {server_id}] 检测到屏幕中间的弹窗广告！")
+            # 处理 Google 弹窗广告
+            if "google_vignette" in sb.get_current_url():
+                print(f" -> [服务 {server_id}] 拦截到广告，尝试跳过...")
                 try:
-                    # 尝试点击 Close
                     sb.click('div:contains("Close"), span:contains("Close")')
                     time.sleep(2)
                 except:
                     pass
-                
-                # 如果广告还没关掉，使用最稳妥的刷新大法（刷新会直接绕过插页广告加载原网页）
                 if "google_vignette" in sb.get_current_url():
-                    print(f" -> [服务 {server_id}] 使用刷新页面绕过广告...")
                     sb.refresh()
                     time.sleep(8)
             
@@ -109,9 +117,10 @@ def process_account(sb, username, password):
                 renew_btn = 'button:contains("Renew Server")'
                 if sb.is_element_visible(renew_btn):
                     sb.click(renew_btn)
-                    print(f" -> [服务 {server_id}] 已点击续期，处理验证码...")
-                    
+                    print(f" -> [服务 {server_id}] 已点击续期，处理弹窗...")
                     time.sleep(4)
+                    
+                    # 弹窗里的提交逻辑，同样适用双重策略
                     try:
                         sb.uc_gui_click_captcha()
                     except:
@@ -121,23 +130,23 @@ def process_account(sb, username, password):
                         except:
                             pass
                     
-                    print(f" -> [服务 {server_id}] 验证已触发，等待后台自动提交...")
+                    print(f" -> [服务 {server_id}] 续期请求已触发，等待 15 秒确认...")
                     time.sleep(15) 
                     
                     sb.save_screenshot(f"{username}_server_{server_id}_done.png")
                     account_report.append(f"  ✅ ID {server_id}: 续期已提交")
                 else:
                     sb.save_screenshot(f"{username}_server_{server_id}_no_btn.png")
-                    account_report.append(f"  ℹ️ ID {server_id}: 未找到续期按钮")
+                    account_report.append(f"  ℹ️ ID {server_id}: 未找到续期按钮 (可能暂无需续期)")
             except Exception as e:
                 account_report.append(f"  ❌ ID {server_id}: 处理出错")
-                print(f" -> [服务 {server_id}] 错误信息: {e}")
+                print(f" -> [服务 {server_id}] 错误: {e}")
 
         return True, "\n".join(account_report)
 
     except Exception as e:
         sb.save_screenshot(f"{username}_fatal_error.png")
-        return False, f"❌ 账号 <b>{username}</b> 流程中断: {str(e)[:100]}"
+        return False, f"❌ 账号 <b>{username}</b> 流程崩溃: {str(e)[:100]}"
 
 def main():
     if not ZAMPTO_ACCOUNT:
