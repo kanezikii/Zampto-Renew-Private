@@ -121,13 +121,25 @@ def process_account(sb, username, password):
             sb.uc_open_with_reconnect(url, 3)
             time.sleep(8) 
             
-            # 【扫雷模式】：尝试清理所有悬浮广告、问卷弹窗和横幅
-            print(" -> 尝试清理可能的悬浮弹窗和广告...")
+            # 【终极扫雷模式】：核弹级广告清理
+            print(" -> 执行强力广告及问卷弹窗清理...")
             try:
-                for target in ['div:contains("Close")', 'span:contains("Close")', 'button:contains("Hide")']:
+                # 绝杀 1: 暴力移除所有非 Cloudflare 的 iframe (专门对付 Google 问卷广告)
+                sb.execute_script("""
+                    document.querySelectorAll('iframe').forEach(iframe => {
+                        let src = iframe.src.toLowerCase();
+                        if (!src.includes('cloudflare') && !src.includes('turnstile') && !src.includes('challenge')) {
+                            iframe.remove();
+                        }
+                    });
+                """)
+                time.sleep(1)
+                
+                # 绝杀 2: 使用高权限 JS 点击所有带 Close/Hide 字样的元素
+                for target in ['div:contains("Close")', 'span:contains("Close")', 'a:contains("Close")', 'button:contains("Hide")']:
                     if sb.is_element_visible(target):
-                        sb.click(target)
-                        time.sleep(1)
+                        sb.js_click(target)
+                        time.sleep(0.5)
             except:
                 pass
             
@@ -135,11 +147,16 @@ def process_account(sb, username, password):
             sb.execute_script("window.scrollTo(0, document.body.scrollHeight);")
             time.sleep(2)
             
-            # 处理 Google 全屏跳转广告
+            # 处理全屏跳转广告
             if "google_vignette" in sb.get_current_url():
                 print(f" -> [服务 {server_id}] 拦截到全屏广告，尝试刷新跳过...")
                 sb.refresh()
                 time.sleep(8)
+                # 刷新后再次执行强力清理和滚动
+                try:
+                    sb.execute_script("""document.querySelectorAll('iframe').forEach(f => { let s = f.src.toLowerCase(); if (!s.includes('cloudflare') && !s.includes('turnstile') && !s.includes('challenge')) f.remove(); });""")
+                except:
+                    pass
                 sb.execute_script("window.scrollTo(0, document.body.scrollHeight);")
                 time.sleep(2)
             
@@ -149,11 +166,12 @@ def process_account(sb, username, password):
                 if sb.is_element_visible(renew_btn):
                     sb.execute_script("arguments[0].scrollIntoView({block: 'center'});", sb.find_element(renew_btn))
                     time.sleep(1)
-                    sb.click(renew_btn)
-                    print(f" -> [服务 {server_id}] 已点击续期按钮，正在加载弹窗验证码...")
+                    
+                    # 【核心修复】：不再模拟鼠标物理点击，使用 js_click 无视所有可能残存的透明遮挡层！
+                    sb.js_click(renew_btn)
+                    print(f" -> [服务 {server_id}] 已强制点击续期按钮，正在加载弹窗验证码...")
                     time.sleep(8) 
                     
-                    # 处理续期弹窗中的验证码
                     try:
                         if sb.is_element_visible(cf_selector):
                             sb.execute_script("arguments[0].scrollIntoView({block: 'center'});", sb.find_element(cf_selector))
@@ -178,7 +196,6 @@ def process_account(sb, username, password):
                     print(f" -> [服务 {server_id}] 弹窗验证码已点击，等待 25 秒让系统自动跳转完成续期...")
                     time.sleep(25) 
                     
-                    # 截图并通过 TG 发送照片
                     screenshot_name = f"{username}_server_{server_id}_done.png"
                     sb.save_screenshot(screenshot_name)
                     print(f" -> [服务 {server_id}] 截图已保存，正在发送至 Telegram...")
@@ -220,7 +237,6 @@ def main():
 
     full_msg = "\n\n".join(final_reports)
     print(full_msg.replace("<b>", "").replace("</b>", ""))
-    # 最后发送一次纯文本的汇总报告
     send_telegram_msg(full_msg)
 
 if __name__ == "__main__":
