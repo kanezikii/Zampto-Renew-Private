@@ -58,30 +58,45 @@ def process_account(sb, username, password):
         sb.maximize_window()
         sb.uc_open_with_reconnect(LOGIN_URL, 4)
         
-        # 【修复：去掉了引发报错的 timeout 参数】
+        # 【修复：使用 Present 替代 Visible，无视 CSS 隐身障眼法】
         print(" -> 正在智能侦测页面状态 (最高等待 60 秒)...")
         login_ready = False
-        for i in range(30): # 循环 30 次，每次等 2 秒，大约 60 秒
-            # 雷达扫描 1：如果账号框出来了，说明可以直接登录了
-            if sb.is_element_visible('input[name="identifier"]'):
+        for i in range(30):
+            # 雷达扫描 1：如果账号框的代码存在了，说明可以直接登录了
+            if sb.is_element_present('input[name="identifier"]'):
                 print("    [+] 拦截已解除，登录框已就绪！")
                 login_ready = True
                 break
                 
-            # 雷达扫描 2：如果出现了盾牌 iframe，立刻进行打击
-            if sb.is_element_visible('iframe'):
+            # 雷达扫描 2：只要网页源码里有 iframe 或者特定的拦截文字，立刻进行打击
+            if sb.is_element_present('iframe') or sb.is_text_visible("Verify you are human") or sb.is_text_visible("security verification"):
                 print(f"    [!] 发现全局拦截盾牌 (第 {i+1} 次扫描)，尝试物理破盾...")
+                
+                # 尝试将它拉到屏幕中央
                 try:
                     sb.execute_script("arguments[0].scrollIntoView({block: 'center'});", sb.find_element('iframe'))
-                    time.sleep(1)
-                    sb.uc_click('iframe')
                 except:
                     pass
+                time.sleep(1)
+                
+                # 方案 A：官方物理鼠标点击
                 try:
                     sb.uc_gui_click_captcha()
                 except:
                     pass
-                time.sleep(3) # 给破盾后网络跳转留出缓冲时间
+                
+                time.sleep(1)
+                
+                # 方案 B：高权限拟人点击
+                try:
+                    if sb.is_element_present(cf_selector):
+                        sb.uc_click(cf_selector)
+                    else:
+                        sb.uc_click('iframe')
+                except:
+                    pass
+                
+                time.sleep(4) # 给破盾后网络跳转留出缓冲时间
             else:
                 time.sleep(2) # 页面还在白屏加载中，静静等待
                 
@@ -126,7 +141,7 @@ def process_account(sb, username, password):
         time.sleep(2)
         
         try:
-            if sb.is_element_visible(cf_selector):
+            if sb.is_element_present(cf_selector):
                 sb.uc_click(cf_selector)
             else:
                 sb.uc_click('iframe')
@@ -192,7 +207,7 @@ def process_account(sb, username, password):
                     time.sleep(8) 
                     
                     try:
-                        if sb.is_element_visible(cf_selector):
+                        if sb.is_element_present(cf_selector):
                             sb.execute_script("arguments[0].scrollIntoView({block: 'center'});", sb.find_element(cf_selector))
                     except:
                         pass
@@ -205,7 +220,7 @@ def process_account(sb, username, password):
                     time.sleep(2)
                     
                     try:
-                        if sb.is_element_visible(cf_selector):
+                        if sb.is_element_present(cf_selector):
                             sb.uc_click(cf_selector)
                         else:
                             sb.uc_click('iframe')
