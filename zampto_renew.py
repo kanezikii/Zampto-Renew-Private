@@ -57,33 +57,32 @@ def process_account(sb, username, password):
         print(" -> 正在访问登录页面...")
         sb.maximize_window()
         sb.uc_open_with_reconnect(LOGIN_URL, 4)
-        time.sleep(6) 
+        time.sleep(5) 
         
-        # 【新增：全局前置破盾逻辑】应对 Zampto 新加的全局拦截
+        # 【修复】：强制等待 10 秒，防止 Cloudflare 盾牌加载过慢导致判断失效
         print(" -> 检查是否触发全局 Cloudflare 盾牌...")
         try:
-            if sb.is_element_visible(cf_selector):
-                print("    [+] 触发了全局拦截！准备执行点击...")
-                sb.execute_script("arguments[0].scrollIntoView({block: 'center'});", sb.find_element(cf_selector))
-                time.sleep(2)
-                try:
-                    sb.uc_gui_click_captcha()
-                except:
-                    pass
-                time.sleep(2)
-                try:
-                    sb.uc_click(cf_selector)
-                except:
-                    sb.uc_click('iframe')
-                print("    [+] 拦截盾牌已点击，静候 20 秒等待放行跳转...")
-                time.sleep(20)
-        except:
-            pass
+            sb.wait_for_element_visible(cf_selector, timeout=10)
+            print("    [+] 触发了全局拦截！准备执行点击...")
+            sb.execute_script("arguments[0].scrollIntoView({block: 'center'});", sb.find_element(cf_selector))
+            time.sleep(2)
+            try:
+                sb.uc_gui_click_captcha()
+            except:
+                pass
+            time.sleep(2)
+            try:
+                sb.uc_click(cf_selector)
+            except:
+                sb.uc_click('iframe')
+            print("    [+] 拦截盾牌已点击，静候 20 秒等待放行跳转...")
+            time.sleep(20)
+        except Exception:
+            print("    [+] 未检测到全局拦截盾牌或已通过，继续流程...")
 
         print(" -> 填写账号...")
         account_input = 'input[name="identifier"], input[name="email"], input[type="email"], input[type="text"]'
-        # 【加固：将超时时间从 15 秒放宽到 30 秒，应对页面跳转延迟】
-        sb.wait_for_element_visible(account_input, timeout=30)
+        sb.wait_for_element_visible(account_input, timeout=20)
         sb.type(account_input, username)
         
         print(" -> 点击第一步的继续按钮...")
@@ -143,10 +142,8 @@ def process_account(sb, username, password):
             sb.uc_open_with_reconnect(url, 3)
             time.sleep(8) 
             
-            # 【终极扫雷模式】：核弹级广告清理
             print(" -> 执行强力广告及问卷弹窗清理...")
             try:
-                # 绝杀 1: 暴力移除所有非 Cloudflare 的 iframe (专门对付 Google 问卷广告)
                 sb.execute_script("""
                     document.querySelectorAll('iframe').forEach(iframe => {
                         let src = iframe.src.toLowerCase();
@@ -157,7 +154,6 @@ def process_account(sb, username, password):
                 """)
                 time.sleep(1)
                 
-                # 绝杀 2: 使用高权限 JS 点击所有带 Close/Hide 字样的元素
                 for target in ['div:contains("Close")', 'span:contains("Close")', 'a:contains("Close")', 'button:contains("Hide")']:
                     if sb.is_element_visible(target):
                         sb.js_click(target)
@@ -169,7 +165,6 @@ def process_account(sb, username, password):
             sb.execute_script("window.scrollTo(0, document.body.scrollHeight);")
             time.sleep(2)
             
-            # 处理全屏跳转广告 (Vignette)
             if "google_vignette" in sb.get_current_url():
                 print(f" -> [服务 {server_id}] 拦截到全屏网址跳转广告，尝试刷新跳过...")
                 sb.refresh()
@@ -184,7 +179,6 @@ def process_account(sb, username, password):
                     sb.execute_script("arguments[0].scrollIntoView({block: 'center'});", sb.find_element(renew_btn))
                     time.sleep(1)
                     
-                    # 依然使用 js_click，无视任何残存的微小透明遮挡
                     sb.js_click(renew_btn)
                     print(f" -> [服务 {server_id}] 已强制点击续期按钮，正在加载弹窗验证码...")
                     time.sleep(8) 
