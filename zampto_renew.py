@@ -58,18 +58,18 @@ def process_account(sb, username, password):
         sb.maximize_window()
         sb.uc_open_with_reconnect(LOGIN_URL, 4)
         
-        # 【全新修复：哨兵动态循环破盾】
+        # 【修复：去掉了引发报错的 timeout 参数】
         print(" -> 正在智能侦测页面状态 (最高等待 60 秒)...")
         login_ready = False
-        for i in range(20):
+        for i in range(30): # 循环 30 次，每次等 2 秒，大约 60 秒
             # 雷达扫描 1：如果账号框出来了，说明可以直接登录了
-            if sb.is_element_visible('input[name="identifier"]', timeout=0.5):
+            if sb.is_element_visible('input[name="identifier"]'):
                 print("    [+] 拦截已解除，登录框已就绪！")
                 login_ready = True
                 break
                 
             # 雷达扫描 2：如果出现了盾牌 iframe，立刻进行打击
-            if sb.is_element_visible('iframe', timeout=0.5):
+            if sb.is_element_visible('iframe'):
                 print(f"    [!] 发现全局拦截盾牌 (第 {i+1} 次扫描)，尝试物理破盾...")
                 try:
                     sb.execute_script("arguments[0].scrollIntoView({block: 'center'});", sb.find_element('iframe'))
