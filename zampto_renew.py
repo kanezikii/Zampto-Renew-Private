@@ -57,32 +57,40 @@ def process_account(sb, username, password):
         print(" -> 正在访问登录页面...")
         sb.maximize_window()
         sb.uc_open_with_reconnect(LOGIN_URL, 4)
-        time.sleep(5) 
         
-        # 【修复】：强制等待 10 秒，防止 Cloudflare 盾牌加载过慢导致判断失效
-        print(" -> 检查是否触发全局 Cloudflare 盾牌...")
-        try:
-            sb.wait_for_element_visible(cf_selector, timeout=10)
-            print("    [+] 触发了全局拦截！准备执行点击...")
-            sb.execute_script("arguments[0].scrollIntoView({block: 'center'});", sb.find_element(cf_selector))
-            time.sleep(2)
-            try:
-                sb.uc_gui_click_captcha()
-            except:
-                pass
-            time.sleep(2)
-            try:
-                sb.uc_click(cf_selector)
-            except:
-                sb.uc_click('iframe')
-            print("    [+] 拦截盾牌已点击，静候 20 秒等待放行跳转...")
-            time.sleep(20)
-        except Exception:
-            print("    [+] 未检测到全局拦截盾牌或已通过，继续流程...")
+        # 【全新修复：哨兵动态循环破盾】
+        print(" -> 正在智能侦测页面状态 (最高等待 60 秒)...")
+        login_ready = False
+        for i in range(20):
+            # 雷达扫描 1：如果账号框出来了，说明可以直接登录了
+            if sb.is_element_visible('input[name="identifier"]', timeout=0.5):
+                print("    [+] 拦截已解除，登录框已就绪！")
+                login_ready = True
+                break
+                
+            # 雷达扫描 2：如果出现了盾牌 iframe，立刻进行打击
+            if sb.is_element_visible('iframe', timeout=0.5):
+                print(f"    [!] 发现全局拦截盾牌 (第 {i+1} 次扫描)，尝试物理破盾...")
+                try:
+                    sb.execute_script("arguments[0].scrollIntoView({block: 'center'});", sb.find_element('iframe'))
+                    time.sleep(1)
+                    sb.uc_click('iframe')
+                except:
+                    pass
+                try:
+                    sb.uc_gui_click_captcha()
+                except:
+                    pass
+                time.sleep(3) # 给破盾后网络跳转留出缓冲时间
+            else:
+                time.sleep(2) # 页面还在白屏加载中，静静等待
+                
+        if not login_ready:
+            sb.save_screenshot(f"{username}_shield_failed.png")
+            return False, f"❌ 账号 <b>{username}</b> 破盾失败，60秒内未能突破防护墙。"
 
         print(" -> 填写账号...")
         account_input = 'input[name="identifier"], input[name="email"], input[type="email"], input[type="text"]'
-        sb.wait_for_element_visible(account_input, timeout=20)
         sb.type(account_input, username)
         
         print(" -> 点击第一步的继续按钮...")
@@ -101,7 +109,7 @@ def process_account(sb, username, password):
         except:
             pass
             
-        print(" -> 傻等 12 秒，让 Cloudflare 验证码充分加载...")
+        print(" -> 傻等 12 秒，让内部 Cloudflare 验证码充分加载...")
         time.sleep(12)
         
         print(" -> 准备执行多重拟人点击...")
@@ -142,24 +150,24 @@ def process_account(sb, username, password):
             sb.uc_open_with_reconnect(url, 3)
             time.sleep(8) 
             
-            print(" -> 执行强力广告及问卷弹窗清理...")
-            try:
-                sb.execute_script("""
-                    document.querySelectorAll('iframe').forEach(iframe => {
-                        let src = iframe.src.toLowerCase();
-                        if (!src.includes('cloudflare') && !src.includes('turnstile') && !src.includes('challenge')) {
-                            iframe.remove();
-                        }
-                    });
-                """)
-                time.sleep(1)
-                
-                for target in ['div:contains("Close")', 'span:contains("Close")', 'a:contains("Close")', 'button:contains("Hide")']:
-                    if sb.is_element_visible(target):
-                        sb.js_click(target)
-                        time.sleep(0.5)
-            except:
-                pass
+            print(" -> 等待并检查可能出现的悬浮广告 (最多检查 3 次)...")
+            for i in range(3):
+                time.sleep(3) 
+                try:
+                    ad_closed = False
+                    for target in ['div:contains("Close")', 'span:contains("Close")', 'a:contains("Close")', 'button:contains("Hide")']:
+                        if sb.is_element_visible(target):
+                            print(f"    [+] 第 {i+1} 次发现干扰广告，正在强制清理...")
+                            sb.js_click(target)
+                            time.sleep(2)
+                            ad_closed = True
+                            break 
+                    
+                    if not ad_closed:
+                        print("    [+] 页面干净，未检测到新的悬浮广告。")
+                        break 
+                except:
+                    pass
             
             print(" -> 向下滚动页面，寻找续期按钮...")
             sb.execute_script("window.scrollTo(0, document.body.scrollHeight);")
