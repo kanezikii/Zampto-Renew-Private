@@ -3,7 +3,7 @@ name: Zampto-Renew
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 1,13 * * *'   # 每天北京时间 9:00 和 21:00 执行
+    - cron: '0 1 * * *'   # 每天北京时间上午 9:00 运行 (UTC 1:00)
 
 jobs:
   run_zampto_renew:
