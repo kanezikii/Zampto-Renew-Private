@@ -68,6 +68,7 @@ jobs:
           ZAMPTO_ACCOUNT: ${{ secrets.ZAMPTO_ACCOUNT }}
           TG_BOT: ${{ secrets.TG_BOT }}
           XRAY_CONFIG: ${{ secrets.XRAY_CONFIG }}
+          ZAMPTO_COOKIES: ${{ secrets.ZAMPTO_COOKIES }}
         run: |
           # 根据配置情况，自动为 Python 脚本设置是否启用代理的开关
           if [ -n "$XRAY_CONFIG" ]; then
