@@ -18,4 +18,4 @@ jobs:
           token: ${{ github.token }}
           repository: ${{ github.repository }}
           retain_days: 0         # 不按天数保留
-          keep_minimum_runs: 5   # 保留最近的 5 次记录
+          keep_minimum_runs: 1   # 保留最近的 1次记录
