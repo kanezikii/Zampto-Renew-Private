@@ -3,12 +3,15 @@ name: Zampto-Renew
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 1 * * *'   # 每天北京时间上午 9:00 运行 (UTC 1:00)
+    - cron: '0 1 * * *'    # 每天北京时间上午 9:00 运行 (UTC 1:00)
 
 jobs:
   run_zampto_renew:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    permissions:
+      actions: write
+      contents: read
 
     steps:
       - name: 📥 下载公库代码
@@ -33,7 +36,6 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y google-chrome-stable xvfb x11-utils xdotool
-          # 加上 --upgrade 确保每次运行拉取最新版 seleniumbase
           pip install --upgrade seleniumbase requests
           seleniumbase install chromedriver
 
@@ -41,7 +43,6 @@ jobs:
         env:
           XRAY_CONFIG: ${{ secrets.XRAY_CONFIG }}
         run: |
-          # 在 Bash 脚本层面进行判断，完美绕过 GitHub Actions 的限制
           if [ -z "$XRAY_CONFIG" ]; then
             echo "未配置 XRAY_CONFIG，跳过 Xray 代理启动"
           else
@@ -50,14 +51,10 @@ jobs:
             unzip -q Xray-linux-64.zip -d xray_bin
             chmod +x xray_bin/xray
             
-            # 将 Secret 中的 JSON 写入配置文件
             echo "$XRAY_CONFIG" > xray_bin/config.json
-            
-            # 后台启动 Xray
             nohup ./xray_bin/xray run -c ./xray_bin/config.json > xray.log 2>&1 &
             sleep 4
             
-            # 测试代理是否通畅 (v2rayN 导出的默认本地 SOCKS 端口通常是 10808)
             echo "🌐 测试通过代理获取的出口 IP:"
             curl -s -x socks5h://127.0.0.1:10808 https://api.ipify.org || echo "⚠️ 代理测试超时或失败，但将继续执行"
             echo -e "\n✅ Xray 代理服务已就绪"
@@ -88,4 +85,12 @@ jobs:
         with:
           name: debug-screenshots
           path: "*.png"
-          retention-days: 3
+          retention-days: 1
+
+      - name: 🧹 清理旧工作流运行记录
+        if: always()
+        uses: Mattraks/delete-workflow-runs@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          retain_days: 1
+          keep_minimum_runs: 3
