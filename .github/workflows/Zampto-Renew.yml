@@ -70,14 +70,12 @@ jobs:
           TG_BOT: ${{ secrets.TG_BOT }}
           XRAY_CONFIG: ${{ secrets.XRAY_CONFIG }}
           ZAMPTO_COOKIES: ${{ secrets.ZAMPTO_COOKIES }}
+          CF_COOKIES: ${{ secrets.CF_COOKIES }}
         run: |
-          # 根据配置情况，自动为 Python 脚本设置是否启用代理的开关
           if [ -n "$XRAY_CONFIG" ]; then
             export USE_PROXY="true"
-            echo "🌐 代理已激活，准备通过节点续期..."
           else
             export USE_PROXY="false"
-            echo "⚠️ 未使用代理模式"
           fi
           xvfb-run \
           --auto-servernum \
