@@ -78,13 +78,27 @@ jobs:
           --auto-servernum \
           --server-args="-screen 0 1920x1080x24" \
           python zampto_renew.py
+          EXIT_CODE=$?
+
+          # 清除环境变量中的代理，防止后续 Node.js 步骤（如 artifact 上传）因 SOCKS5 报错
+          echo "ALL_PROXY=" >> $GITHUB_ENV
+          echo "HTTP_PROXY=" >> $GITHUB_ENV
+          echo "HTTPS_PROXY=" >> $GITHUB_ENV
+
+          exit $EXIT_CODE
 
       - name: 📸 上传调试截图
         if: always()
         uses: actions/upload-artifact@v4
+        env:
+          ALL_PROXY: ''
+          HTTP_PROXY: ''
+          HTTPS_PROXY: ''
+          NO_PROXY: '*'
         with:
-          name: debug-screenshots
+          name: debug-screenshots-${{ github.run_number }}
           path: "*.png"
+          if-no-files-found: ignore
           retention-days: 1
 
       - name: 🧹 清理旧工作流运行记录
