@@ -45,6 +45,7 @@ jobs:
         run: |
           if [ -z "$XRAY_CONFIG" ]; then
             echo "未配置 XRAY_CONFIG，跳过 Xray 代理启动"
+            echo "PROXY_STATUS=disabled" >> $GITHUB_ENV
           else
             echo "📦 正在下载并配置 Xray..."
             wget -q https://github.com/XTLS/Xray-core/releases/latest/download/Xray-linux-64.zip
@@ -55,9 +56,15 @@ jobs:
             nohup ./xray_bin/xray run -c ./xray_bin/config.json > xray.log 2>&1 &
             sleep 4
             
-            echo "🌐 测试通过代理获取的出口 IP:"
-            curl -s -x socks5h://127.0.0.1:10808 https://api.ipify.org || echo "⚠️ 代理测试超时或失败，但将继续执行"
-            echo -e "\n✅ Xray 代理服务已就绪"
+            echo "🌐 测试代理连通性..."
+            EXIT_IP=$(curl -s --max-time 8 -x socks5h://127.0.0.1:10808 https://api.ipify.org || echo "")
+            if [ -n "$EXIT_IP" ]; then
+              echo "✅ Xray 代理可用，出口 IP: $EXIT_IP"
+              echo "PROXY_STATUS=enabled" >> $GITHUB_ENV
+            else
+              echo "⚠️ 代理节点连接超时或不可达，将尝试直连模式运行"
+              echo "PROXY_STATUS=fallback" >> $GITHUB_ENV
+            fi
           fi
 
       - name: 🚀 运行续期脚本
@@ -65,11 +72,11 @@ jobs:
           PYTHONIOENCODING: utf-8
           ZAMPTO_ACCOUNT: ${{ secrets.ZAMPTO_ACCOUNT }}
           TG_BOT: ${{ secrets.TG_BOT }}
-          XRAY_CONFIG: ${{ secrets.XRAY_CONFIG }}
           ZAMPTO_COOKIES: ${{ secrets.ZAMPTO_COOKIES }}
           CF_COOKIES: ${{ secrets.CF_COOKIES }}
+          PROXY_STATUS: ${{ env.PROXY_STATUS }}
         run: |
-          if [ -n "$XRAY_CONFIG" ]; then
+          if [ "$PROXY_STATUS" = "enabled" ]; then
             export USE_PROXY="true"
           else
             export USE_PROXY="false"
@@ -80,7 +87,6 @@ jobs:
           python zampto_renew.py
           EXIT_CODE=$?
 
-          # 清除环境变量中的代理，防止后续 Node.js 步骤（如 artifact 上传）因 SOCKS5 报错
           echo "ALL_PROXY=" >> $GITHUB_ENV
           echo "HTTP_PROXY=" >> $GITHUB_ENV
           echo "HTTPS_PROXY=" >> $GITHUB_ENV
